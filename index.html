@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DUST Sensor Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a2236;
+            --bg-card-hover: #1f2a42;
+            --bg-glass: rgba(26, 34, 54, 0.85);
+            --border: rgba(99, 132, 255, 0.12);
+            --border-hover: rgba(99, 132, 255, 0.3);
+            --text-primary: #e8ecf4;
+            --text-secondary: #8b95b0;
+            --text-muted: #5a6580;
+            --accent-blue: #6384ff;
+            --accent-cyan: #22d3ee;
+            --accent-purple: #a78bfa;
+            --accent-pink: #f472b6;
+            --accent-green: #34d399;
+            --accent-orange: #fb923c;
+            --accent-red: #f87171;
+            --color-pm1: #22d3ee;
+            --color-pm25: #6384ff;
+            --color-pm10: #fb923c;
+            --gradient-primary: linear-gradient(135deg, #6384ff 0%, #a78bfa 100%);
+            --gradient-cool: linear-gradient(135deg, #22d3ee 0%, #6384ff 100%);
+            --shadow-glow: 0 0 40px rgba(99, 132, 255, 0.15);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --radius-xs: 6px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(ellipse at 20% 50%, rgba(99,132,255,0.06) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 20%, rgba(167,139,250,0.04) 0%, transparent 50%),
+                        radial-gradient(ellipse at 50% 80%, rgba(34,211,238,0.04) 0%, transparent 50%);
+            animation: bgShift 20s ease-in-out infinite;
+            z-index: 0; pointer-events: none;
+        }
+
+        @keyframes bgShift {
+            0%, 100% { transform: translate(0,0) rotate(0deg); }
+            33% { transform: translate(2%,-2%) rotate(1deg); }
+            66% { transform: translate(-1%,1%) rotate(-0.5deg); }
+        }
+
+        .app-container {
+            position: relative; z-index: 1;
+            max-width: 1400px; margin: 0 auto; padding: 24px;
+        }
+
+        /* Header */
+        .app-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 20px 0 32px;
+        }
+        .logo-area { display: flex; align-items: center; gap: 16px; }
+        .logo-icon {
+            width: 48px; height: 48px;
+            background: var(--gradient-primary); border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 20px rgba(99,132,255,0.35);
+        }
+        .app-title {
+            font-size: 24px; font-weight: 800; letter-spacing: -0.5px;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .app-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+        /* Upload Zone */
+        .upload-zone {
+            border: 2px dashed var(--border); border-radius: var(--radius);
+            padding: 60px 40px; text-align: center; cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
+            background: var(--bg-card); position: relative; overflow: hidden;
+        }
+        .upload-zone:hover, .upload-zone.drag-over {
+            border-color: var(--accent-blue); background: var(--bg-card-hover);
+            box-shadow: var(--shadow-glow); transform: translateY(-2px);
+        }
+        .upload-zone .material-icons-round { font-size: 56px; color: var(--accent-blue); margin-bottom: 16px; opacity: 0.7; }
+        .upload-zone h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+        .upload-zone p { color: var(--text-secondary); font-size: 14px; }
+        .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+        /* File info bar */
+        .file-info-bar {
+            display: none; align-items: center; justify-content: space-between;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 14px 20px; margin-bottom: 24px;
+            animation: slideDown 0.3s ease;
+        }
+        .file-info-bar.active { display: flex; }
+        .file-info-left { display: flex; align-items: center; gap: 12px; }
+        .file-icon {
+            width: 40px; height: 40px; background: var(--gradient-cool);
+            border-radius: 10px; display: flex; align-items: center; justify-content: center;
+        }
+        .file-icon .material-icons-round { font-size: 20px; }
+        .file-name { font-weight: 600; font-size: 14px; }
+        .file-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+        .btn-change-file {
+            background: none; border: 1px solid var(--border); color: var(--text-secondary);
+            padding: 8px 16px; border-radius: var(--radius-xs); font-size: 13px;
+            cursor: pointer; font-family: inherit; transition: all 0.2s;
+        }
+        .btn-change-file:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+
+        /* Sessions Section */
+        .sessions-section { display: none; animation: fadeInUp 0.5s ease; }
+        .sessions-section.active { display: block; }
+        .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .section-title { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+        .session-count {
+            background: var(--bg-card); border: 1px solid var(--border);
+            padding: 6px 14px; border-radius: 20px; font-size: 13px; color: var(--text-secondary);
+        }
+        .sessions-grid { display: grid; gap: 12px; }
+
+        .session-header-row {
+            display: grid; grid-template-columns: 60px 1fr 1fr 1fr 120px 80px;
+            gap: 16px; padding: 0 24px 12px;
+            font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+            letter-spacing: 0.8px; font-weight: 600;
+        }
+
+        .session-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 20px 24px;
+            display: grid; grid-template-columns: 60px 1fr 1fr 1fr 120px 80px;
+            align-items: center; gap: 16px; cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+        }
+        .session-card:hover {
+            border-color: var(--border-hover); background: var(--bg-card-hover);
+            transform: translateX(4px); box-shadow: var(--shadow-glow);
+        }
+        .session-num {
+            font-size: 22px; font-weight: 800;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .session-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 500; }
+        .session-value { font-size: 14px; font-weight: 500; }
+        .data-count {
+            background: rgba(99,132,255,0.1); color: var(--accent-blue);
+            padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; text-align: center;
+        }
+        .arrow-icon { text-align: right; color: var(--text-muted); transition: all 0.3s; }
+        .session-card:hover .arrow-icon { color: var(--accent-blue); transform: translateX(4px); }
+
+        /* Detail Section */
+        .detail-section { display: none; animation: fadeInUp 0.5s ease; }
+        .detail-section.active { display: block; }
+        .detail-header { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
+        .btn-back {
+            width: 44px; height: 44px; background: var(--bg-card);
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--text-secondary); transition: all 0.2s;
+        }
+        .btn-back:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: var(--bg-card-hover); }
+        .detail-title-area h2 { font-size: 22px; font-weight: 700; }
+        .detail-title-area p { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 12px; margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 20px 24px;
+            position: relative; overflow: hidden;
+        }
+        .stat-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        }
+        .stat-card.pm1::before { background: var(--color-pm1); }
+        .stat-card.pm25::before { background: var(--color-pm25); }
+        .stat-card.pm10::before { background: var(--color-pm10); }
+
+        .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 8px; }
+        .stat-value { font-size: 28px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
+        .stat-card.pm1 .stat-value { color: var(--color-pm1); }
+        .stat-card.pm25 .stat-value { color: var(--color-pm25); }
+        .stat-card.pm10 .stat-value { color: var(--color-pm10); }
+        .stat-range { font-size: 11px; color: var(--text-secondary); }
+
+        /* Range Slider */
+        .range-control {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 20px 24px; margin-bottom: 24px;
+        }
+        .range-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .range-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .range-title .material-icons-round { font-size: 18px; color: var(--accent-blue); }
+        .range-info { font-size: 13px; color: var(--text-secondary); }
+        .range-info span { color: var(--accent-cyan); font-weight: 600; }
+
+        .range-slider-container { position: relative; height: 44px; }
+        .range-track {
+            position: absolute; top: 18px; left: 0; right: 0; height: 8px;
+            background: rgba(99,132,255,0.1); border-radius: 4px;
+        }
+        .range-fill {
+            position: absolute; top: 18px; height: 8px;
+            background: var(--gradient-primary); border-radius: 4px; pointer-events: none;
+        }
+        .range-slider-container input[type="range"] {
+            position: absolute; top: 10px; left: 0; width: 100%; height: 24px;
+            -webkit-appearance: none; appearance: none; background: transparent;
+            pointer-events: none; z-index: 2;
+        }
+        .range-slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+            background: var(--accent-blue); border: 3px solid var(--bg-primary);
+            box-shadow: 0 2px 8px rgba(99,132,255,0.4); cursor: pointer;
+            pointer-events: all; transition: transform 0.15s;
+        }
+        .range-slider-container input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        .range-slider-container input[type="range"]::-moz-range-thumb {
+            width: 22px; height: 22px; border-radius: 50%;
+            background: var(--accent-blue); border: 3px solid var(--bg-primary);
+            box-shadow: 0 2px 8px rgba(99,132,255,0.4); cursor: pointer; pointer-events: all;
+        }
+        .range-labels { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--text-muted); }
+
+        .btn-reset-range {
+            background: none; border: 1px solid var(--border); color: var(--text-secondary);
+            padding: 6px 12px; border-radius: var(--radius-xs); font-size: 12px;
+            font-family: inherit; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-reset-range:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+
+        /* Chart Controls */
+        .chart-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 24px; margin-bottom: 24px;
+            overflow: hidden;
+        }
+        .chart-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+        }
+        .chart-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .chart-title .material-icons-round { font-size: 20px; color: var(--accent-blue); }
+
+        .chart-toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        .toggle-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 7px 14px; border-radius: 8px; cursor: pointer;
+            font-size: 13px; font-weight: 600; font-family: inherit;
+            border: 1px solid var(--border); background: var(--bg-secondary);
+            color: var(--text-muted); transition: all 0.25s;
+            user-select: none;
+        }
+        .toggle-btn .dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            transition: all 0.25s; opacity: 0.4;
+        }
+        .toggle-btn.active {
+            border-color: var(--border-hover); color: var(--text-primary);
+        }
+        .toggle-btn.active .dot { opacity: 1; }
+
+        .toggle-btn[data-key="all"] .dot { background: var(--gradient-primary); }
+        .toggle-btn[data-key="all"].active { border-color: rgba(99,132,255,0.4); background: rgba(99,132,255,0.08); }
+
+        .toggle-btn[data-key="pm1"] .dot { background: var(--color-pm1); }
+        .toggle-btn[data-key="pm1"].active { border-color: rgba(34,211,238,0.4); background: rgba(34,211,238,0.08); color: var(--color-pm1); }
+
+        .toggle-btn[data-key="pm25"] .dot { background: var(--color-pm25); }
+        .toggle-btn[data-key="pm25"].active { border-color: rgba(99,132,255,0.4); background: rgba(99,132,255,0.08); color: var(--color-pm25); }
+
+        .toggle-btn[data-key="pm10"] .dot { background: var(--color-pm10); }
+        .toggle-btn[data-key="pm10"].active { border-color: rgba(251,146,60,0.4); background: rgba(251,146,60,0.08); color: var(--color-pm10); }
+
+        /* Chart Settings Row */
+        .chart-settings {
+            display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+            padding: 14px 0; margin-bottom: 8px;
+            border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+        }
+        .setting-group {
+            display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary);
+        }
+        .setting-group label { white-space: nowrap; font-weight: 500; }
+        .line-width-slider {
+            -webkit-appearance: none; appearance: none; width: 80px; height: 4px;
+            background: rgba(99,132,255,0.15); border-radius: 2px; outline: none;
+        }
+        .line-width-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+            background: var(--accent-blue); cursor: pointer; border: 2px solid var(--bg-primary);
+        }
+        .line-width-slider::-moz-range-thumb {
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--accent-blue); cursor: pointer; border: 2px solid var(--bg-primary);
+        }
+        .line-width-value {
+            min-width: 32px; text-align: center; font-weight: 700;
+            color: var(--accent-blue); font-size: 12px;
+        }
+        .color-pick {
+            width: 24px; height: 24px; border: 2px solid var(--border); border-radius: 6px;
+            cursor: pointer; padding: 0; background: none; overflow: hidden;
+        }
+        .color-pick::-webkit-color-swatch-wrapper { padding: 0; }
+        .color-pick::-webkit-color-swatch { border: none; border-radius: 4px; }
+        .color-pick::-moz-color-swatch { border: none; border-radius: 4px; }
+        .color-label { font-size: 11px; font-weight: 600; }
+
+        #chartPM { width: 100%; height: 420px; }
+
+        /* Data Table */
+        .data-table-section {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 24px;
+        }
+        .data-table-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 20px; border-bottom: 1px solid var(--border);
+        }
+        .data-table-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .data-table-title .material-icons-round { font-size: 18px; color: var(--accent-blue); }
+        .table-scroll { max-height: 400px; overflow-y: auto; }
+        .table-scroll::-webkit-scrollbar { width: 6px; }
+        .table-scroll::-webkit-scrollbar-track { background: var(--bg-secondary); }
+        .table-scroll::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
+
+        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .data-table thead { position: sticky; top: 0; z-index: 1; }
+        .data-table th {
+            background: var(--bg-secondary); padding: 10px 16px; text-align: left;
+            font-weight: 600; font-size: 11px;
+            letter-spacing: 0.5px; color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+        .data-table td {
+            padding: 8px 16px; border-bottom: 1px solid rgba(99,132,255,0.05);
+            color: var(--text-secondary); font-variant-numeric: tabular-nums;
+        }
+        .data-table tr:hover td { background: rgba(99,132,255,0.03); color: var(--text-primary); }
+
+        .pm-good { color: var(--accent-green) !important; }
+        .pm-moderate { color: var(--accent-cyan) !important; }
+        .pm-unhealthy { color: var(--accent-orange) !important; }
+        .pm-hazardous { color: var(--accent-red) !important; }
+
+        .btn-export {
+            background: var(--bg-card); border: 1px solid var(--border);
+            color: var(--text-secondary); padding: 8px 16px; border-radius: var(--radius-xs);
+            font-size: 12px; font-family: inherit; font-weight: 500;
+            cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+        }
+        .btn-export:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+        .btn-export .material-icons-round { font-size: 16px; }
+
+        /* Animations */
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Loading */
+        .loading-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(10,14,26,0.85); z-index: 100;
+            align-items: center; justify-content: center; flex-direction: column; gap: 20px;
+        }
+        .loading-overlay.active { display: flex; }
+        .loading-spinner {
+            width: 48px; height: 48px; border: 4px solid var(--border);
+            border-top-color: var(--accent-blue); border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { font-size: 14px; color: var(--text-secondary); }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .session-card { grid-template-columns: 50px 1fr 1fr; gap: 10px; }
+            .session-header-row { display: none; }
+            .stats-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">데이터 분석 중...</div>
+    </div>
+
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon"><span class="material-icons-round">air</span></div>
+                <div>
+                    <div class="app-title">DUST Analyzer</div>
+                    <div class="app-subtitle">미세먼지 센서 데이터 분석 대시보드</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="file-info-bar" id="fileInfoBar">
+            <div class="file-info-left">
+                <div class="file-icon"><span class="material-icons-round">description</span></div>
+                <div>
+                    <div class="file-name" id="fileName">-</div>
+                    <div class="file-meta" id="fileMeta">-</div>
+                </div>
+            </div>
+            <button class="btn-change-file" id="btnChangeFile">파일 변경</button>
+        </div>
+
+        <div class="upload-zone" id="uploadZone">
+            <span class="material-icons-round">cloud_upload</span>
+            <h3>CSV 파일을 드래그하거나 클릭하여 업로드</h3>
+            <p>DUST_LOG 센서 데이터 CSV 파일을 선택하세요</p>
+            <input type="file" id="fileInput" accept=".csv">
+        </div>
+
+        <!-- Sessions Overview -->
+        <div class="sessions-section" id="sessionsSection">
+            <div class="section-header">
+                <div class="section-title">📊 세션 목록</div>
+                <div class="session-count" id="sessionCount">0 sessions</div>
+            </div>
+            <div class="session-header-row">
+                <div>세션</div>
+                <div>날짜</div>
+                <div>시간 범위</div>
+                <div>측정 시간</div>
+                <div>데이터 수</div>
+                <div></div>
+            </div>
+            <div class="sessions-grid" id="sessionsGrid"></div>
+        </div>
+
+        <!-- Detail View -->
+        <div class="detail-section" id="detailSection">
+            <div class="detail-header">
+                <button class="btn-back" id="btnBack" title="목록으로 돌아가기">
+                    <span class="material-icons-round">arrow_back</span>
+                </button>
+                <div class="detail-title-area">
+                    <h2 id="detailTitle">Session 4</h2>
+                    <p id="detailSubtitle">-</p>
+                </div>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="stats-grid" id="statsGrid"></div>
+
+            <!-- Range Slider -->
+            <div class="range-control">
+                <div class="range-header">
+                    <div class="range-title">
+                        <span class="material-icons-round">tune</span>
+                        시간 범위 선택
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <div class="range-info">
+                            <span id="rangeStart">-</span> ~ <span id="rangeEnd">-</span>
+                        </div>
+                        <button class="btn-reset-range" id="btnResetRange">전체 보기</button>
+                    </div>
+                </div>
+                <div class="range-slider-container">
+                    <div class="range-track"></div>
+                    <div class="range-fill" id="rangeFill"></div>
+                    <input type="range" id="rangeMin" min="0" max="100" value="0">
+                    <input type="range" id="rangeMax" min="0" max="100" value="100">
+                </div>
+                <div class="range-labels">
+                    <span id="rangeLabelStart">-</span>
+                    <span id="rangeLabelEnd">-</span>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div class="chart-title">
+                        <span class="material-icons-round">show_chart</span>
+                        미세먼지 농도 추이
+                    </div>
+                    <div class="chart-toggles" id="chartToggles">
+                        <button class="toggle-btn active" data-key="all" onclick="toggleSeries('all')">
+                            <span class="dot"></span> All
+                        </button>
+                        <button class="toggle-btn active" data-key="pm1" onclick="toggleSeries('pm1')">
+                            <span class="dot"></span> PM1.0
+                        </button>
+                        <button class="toggle-btn active" data-key="pm25" onclick="toggleSeries('pm25')">
+                            <span class="dot"></span> PM2.5
+                        </button>
+                        <button class="toggle-btn active" data-key="pm10" onclick="toggleSeries('pm10')">
+                            <span class="dot"></span> PM10
+                        </button>
+                    </div>
+                </div>
+                <div class="chart-settings">
+                    <div class="setting-group">
+                        <label>선 두께</label>
+                        <input type="range" class="line-width-slider" id="lineWidthSlider" min="0.5" max="6" step="0.5" value="2.5">
+                        <span class="line-width-value" id="lineWidthValue">2.5px</span>
+                    </div>
+                    <div class="setting-group">
+                        <span class="color-label" style="color:var(--color-pm1)">PM1.0</span>
+                        <input type="color" class="color-pick" id="colorPM1" value="#22d3ee" title="PM1.0 색상">
+                    </div>
+                    <div class="setting-group">
+                        <span class="color-label" style="color:var(--color-pm25)">PM2.5</span>
+                        <input type="color" class="color-pick" id="colorPM25" value="#6384ff" title="PM2.5 색상">
+                    </div>
+                    <div class="setting-group">
+                        <span class="color-label" style="color:var(--color-pm10)">PM10</span>
+                        <input type="color" class="color-pick" id="colorPM10" value="#fb923c" title="PM10 색상">
+                    </div>
+                </div>
+                <div id="chartPM"></div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="data-table-section">
+                <div class="data-table-header">
+                    <div class="data-table-title">
+                        <span class="material-icons-round">table_chart</span>
+                        측정 데이터 (<span id="tableCount">0</span>건)
+                    </div>
+                    <button class="btn-export" id="btnExportCSV">
+                        <span class="material-icons-round">download</span>
+                        CSV 내보내기
+                    </button>
+                </div>
+                <div class="table-scroll">
+                    <table class="data-table" id="dataTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Time</th>
+                                <th>PM1.0 (μg/m<sup>3</sup>)</th>
+                                <th>PM2.5 (μg/m<sup>3</sup>)</th>
+                                <th>PM10 (μg/m<sup>3</sup>)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Highcharts: load with fallback -->
+    <script>
+    // Dynamic Highcharts loader with fallback
+    function loadScript(url) {
+        return new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = url;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+        });
+    }
+
+    async function loadHighcharts() {
+        const cdns = [
+            'https://code.highcharts.com/highcharts.js',
+            'https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.4.0/highcharts.min.js',
+            'https://cdn.jsdelivr.net/npm/highcharts@11.4.0/highcharts.min.js',
+        ];
+        for (const url of cdns) {
+            try {
+                await loadScript(url);
+                if (typeof Highcharts !== 'undefined') {
+                    console.log('Highcharts loaded from:', url);
+                    return true;
+                }
+            } catch (e) {
+                console.warn('Failed to load Highcharts from:', url);
+            }
+        }
+        return false;
+    }
+
+    let highchartsReady = false;
+
+    loadHighcharts().then(ok => {
+        highchartsReady = ok;
+        if (ok) {
+            // Apply dark theme
+            Highcharts.setOptions({
+                chart: { backgroundColor: 'transparent', style: { fontFamily: 'Inter, sans-serif' } },
+                title: { style: { color: '#e8ecf4', fontSize: '0px' } },
+                xAxis: {
+                    labels: { style: { color: '#5a6580', fontSize: '10px' } },
+                    lineColor: 'rgba(99,132,255,0.12)',
+                    tickColor: 'rgba(99,132,255,0.12)',
+                    gridLineColor: 'rgba(99,132,255,0.06)',
+                },
+                yAxis: {
+                    labels: { style: { color: '#5a6580', fontSize: '10px' } },
+                    gridLineColor: 'rgba(99,132,255,0.08)',
+                    title: { style: { color: '#8b95b0' } },
+                },
+                tooltip: {
+                    backgroundColor: '#1a2236',
+                    borderColor: 'rgba(99,132,255,0.2)',
+                    style: { color: '#e8ecf4', fontSize: '12px' },
+                    borderRadius: 10, shadow: false,
+                },
+                legend: {
+                    itemStyle: { color: '#8b95b0', fontWeight: '500', fontSize: '12px' },
+                    itemHoverStyle: { color: '#e8ecf4' },
+                },
+                credits: { enabled: false },
+                exporting: {
+                    buttons: { contextButton: { symbolStroke: '#8b95b0', theme: { fill: 'transparent' } } }
+                },
+                plotOptions: {
+                    series: { animation: { duration: 800 } },
+                    areaspline: { fillOpacity: 0.1, lineWidth: 2.5, marker: { enabled: false, radius: 2 }, states: { hover: { lineWidth: 3 } } },
+                    spline: { lineWidth: 2.5, marker: { enabled: false }, states: { hover: { lineWidth: 3 } } },
+                }
+            });
+        } else {
+            console.error('Highcharts could not be loaded from any CDN.');
+        }
+    });
+    </script>
+
+    <script>
+    // ============================================================
+    // STATE
+    // ============================================================
+    let allData = [];
+    let sessions = {};
+    let currentSession = null;
+    let currentSessionData = [];
+    let chartPM = null;
+    let seriesVisible = { pm1: true, pm25: true, pm10: true };
+
+    const $ = id => document.getElementById(id);
+
+    // ============================================================
+    // FILE UPLOAD
+    // ============================================================
+    const uploadZone = $('uploadZone');
+    const fileInput = $('fileInput');
+
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+    uploadZone.addEventListener('drop', e => {
+        e.preventDefault(); uploadZone.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+    $('btnChangeFile').addEventListener('click', () => {
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = '.csv';
+        inp.onchange = e => { if (e.target.files.length) handleFile(e.target.files[0]); };
+        inp.click();
+    });
+
+    function handleFile(file) {
+        if (!file.name.endsWith('.csv')) { alert('CSV 파일만 지원됩니다.'); return; }
+        showLoading(true);
+        const reader = new FileReader();
+        reader.onload = e => {
+            setTimeout(() => { parseCSV(e.target.result, file); showLoading(false); }, 100);
+        };
+        reader.readAsText(file);
+    }
+
+    // ============================================================
+    // CSV PARSING
+    // ============================================================
+    function parseCSV(text, file) {
+        const lines = text.trim().split(/\r?\n/);
+        allData = [];
+
+        for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',');
+            if (cols.length < 12) continue;
+            allData.push({
+                dataId:  parseInt(cols[0]),
+                date:    cols[1],
+                time:    cols[2],
+                session: parseInt(cols[3]),
+                count:   parseInt(cols[4]),
+                pm1:     parseFloat(cols[5]),
+                pm25:    parseFloat(cols[6]),
+                pm10:    parseFloat(cols[7]),
+            });
+        }
+
+        sessions = {};
+        allData.forEach(d => {
+            if (!sessions[d.session]) sessions[d.session] = [];
+            sessions[d.session].push(d);
+        });
+
+        $('fileName').textContent = file.name;
+        $('fileMeta').textContent = `${allData.length.toLocaleString()}건 · ${Object.keys(sessions).length} sessions · ${(file.size / 1024).toFixed(1)} KB`;
+        $('fileInfoBar').classList.add('active');
+        uploadZone.style.display = 'none';
+
+        showSessionsList();
+    }
+
+    // ============================================================
+    // SESSION LIST
+    // ============================================================
+    function showSessionsList() {
+        $('detailSection').classList.remove('active');
+        $('sessionsSection').classList.add('active');
+
+        const keys = Object.keys(sessions).map(Number).sort((a, b) => a - b);
+        $('sessionCount').textContent = `${keys.length} session${keys.length > 1 ? 's' : ''}`;
+
+        const grid = $('sessionsGrid');
+        grid.innerHTML = '';
+
+        keys.forEach(k => {
+            const s = sessions[k];
+            const first = s[0], last = s[s.length - 1];
+            const dur = computeDuration(first, last);
+            const card = document.createElement('div');
+            card.className = 'session-card';
+            card.addEventListener('click', () => openSession(k));
+            card.innerHTML = `
+                <div class="session-num">#${k}</div>
+                <div><div class="session-label">날짜</div><div class="session-value">${first.date}</div></div>
+                <div><div class="session-label">시간 범위</div><div class="session-value">${first.time} ~ ${last.time}</div></div>
+                <div><div class="session-label">측정 시간</div><div class="session-value">${dur}</div></div>
+                <div class="data-count">${s.length.toLocaleString()}건</div>
+                <div class="arrow-icon"><span class="material-icons-round">chevron_right</span></div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    function computeDuration(first, last) {
+        let diff = timeToSec(last.time) - timeToSec(first.time);
+        if (diff < 0) diff += 86400;
+        const h = Math.floor(diff / 3600), m = Math.floor((diff % 3600) / 60), s = diff % 60;
+        if (h > 0) return `${h}시간 ${m}분 ${s}초`;
+        if (m > 0) return `${m}분 ${s}초`;
+        return `${s}초`;
+    }
+    function timeToSec(t) { const [h, m, s] = t.split(':').map(Number); return h * 3600 + m * 60 + s; }
+
+    // ============================================================
+    // DETAIL VIEW
+    // ============================================================
+    function openSession(sessionKey) {
+        currentSession = sessionKey;
+        currentSessionData = sessions[sessionKey];
+
+        $('sessionsSection').classList.remove('active');
+        $('detailSection').classList.add('active');
+
+        const first = currentSessionData[0], last = currentSessionData[currentSessionData.length - 1];
+        $('detailTitle').textContent = `Session #${sessionKey}`;
+        $('detailSubtitle').textContent = `${first.date} · ${first.time} ~ ${last.time} · ${computeDuration(first, last)} · ${currentSessionData.length.toLocaleString()}건`;
+
+        // Reset toggles
+        seriesVisible = { pm1: true, pm25: true, pm10: true };
+        document.querySelectorAll('.toggle-btn').forEach(b => b.classList.add('active'));
+
+        // Range slider
+        $('rangeMin').min = 0; $('rangeMin').max = currentSessionData.length - 1; $('rangeMin').value = 0;
+        $('rangeMax').min = 0; $('rangeMax').max = currentSessionData.length - 1; $('rangeMax').value = currentSessionData.length - 1;
+        $('rangeLabelStart').textContent = first.time;
+        $('rangeLabelEnd').textContent = last.time;
+
+        updateRangeView();
+        renderAll();
+    }
+
+    $('btnBack').addEventListener('click', () => {
+        $('detailSection').classList.remove('active');
+        $('sessionsSection').classList.add('active');
+        if (chartPM) { chartPM.destroy(); chartPM = null; }
+    });
+
+    // ============================================================
+    // RANGE SLIDER
+    // ============================================================
+    let rangeTimer = null;
+    $('rangeMin').addEventListener('input', handleRange);
+    $('rangeMax').addEventListener('input', handleRange);
+
+    function handleRange() {
+        let minV = parseInt($('rangeMin').value), maxV = parseInt($('rangeMax').value);
+        if (minV > maxV - 10) {
+            if (this === $('rangeMin')) $('rangeMin').value = maxV - 10;
+            else $('rangeMax').value = minV + 10;
+        }
+        updateRangeView();
+        clearTimeout(rangeTimer);
+        rangeTimer = setTimeout(() => renderAll(), 150);
+    }
+
+    function updateRangeView() {
+        const minV = parseInt($('rangeMin').value), maxV = parseInt($('rangeMax').value);
+        const total = parseInt($('rangeMax').max) || 1;
+        $('rangeFill').style.left = (minV / total * 100) + '%';
+        $('rangeFill').style.width = ((maxV - minV) / total * 100) + '%';
+        if (currentSessionData.length > 0) {
+            $('rangeStart').textContent = currentSessionData[Math.min(minV, currentSessionData.length - 1)].time;
+            $('rangeEnd').textContent = currentSessionData[Math.min(maxV, currentSessionData.length - 1)].time;
+        }
+    }
+
+    $('btnResetRange').addEventListener('click', () => {
+        $('rangeMin').value = 0;
+        $('rangeMax').value = currentSessionData.length - 1;
+        updateRangeView();
+        renderAll();
+    });
+
+    function getFilteredData() {
+        return currentSessionData.slice(parseInt($('rangeMin').value), parseInt($('rangeMax').value) + 1);
+    }
+
+    // ============================================================
+    // TOGGLE SERIES
+    // ============================================================
+    function toggleSeries(key) {
+        const btn = document.querySelector(`.toggle-btn[data-key="${key}"]`);
+        if (key === 'all') {
+            const allActive = seriesVisible.pm1 && seriesVisible.pm25 && seriesVisible.pm10;
+            seriesVisible.pm1 = seriesVisible.pm25 = seriesVisible.pm10 = !allActive;
+            document.querySelectorAll('.toggle-btn').forEach(b => b.classList.toggle('active', !allActive));
+        } else {
+            seriesVisible[key] = !seriesVisible[key];
+            btn.classList.toggle('active');
+            // Update "All" button state
+            const allOn = seriesVisible.pm1 && seriesVisible.pm25 && seriesVisible.pm10;
+            document.querySelector('.toggle-btn[data-key="all"]').classList.toggle('active', allOn);
+        }
+
+        // Update chart visibility
+        if (chartPM) {
+            chartPM.series.forEach(s => {
+                const sKey = s.userOptions._key;
+                if (sKey) s.setVisible(seriesVisible[sKey], false);
+            });
+            chartPM.redraw();
+        }
+    }
+
+    // ============================================================
+    // LINE WIDTH & COLOR CONTROLS
+    // ============================================================
+    let currentLineWidth = 2.5;
+    let seriesColors = { pm1: '#22d3ee', pm25: '#6384ff', pm10: '#fb923c' };
+
+    $('lineWidthSlider').addEventListener('input', function() {
+        currentLineWidth = parseFloat(this.value);
+        $('lineWidthValue').textContent = currentLineWidth + 'px';
+        if (chartPM) {
+            chartPM.series.forEach(s => {
+                s.update({ lineWidth: currentLineWidth }, false);
+            });
+            chartPM.redraw();
+        }
+    });
+
+    $('colorPM1').addEventListener('input', function() { updateSeriesColor('pm1', 0, this.value); });
+    $('colorPM25').addEventListener('input', function() { updateSeriesColor('pm25', 1, this.value); });
+    $('colorPM10').addEventListener('input', function() { updateSeriesColor('pm10', 2, this.value); });
+
+    function updateSeriesColor(key, idx, color) {
+        seriesColors[key] = color;
+        if (chartPM && chartPM.series[idx]) {
+            chartPM.series[idx].update({
+                color: color,
+                fillColor: {
+                    linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                    stops: [[0, color + '40'], [1, color + '00']],
+                },
+            }, true);
+        }
+        // Update toggle dot color
+        const dot = document.querySelector(`.toggle-btn[data-key="${key}"] .dot`);
+        if (dot) dot.style.background = color;
+        // Update color label
+        const label = $('color' + key.replace('pm', 'PM').replace('25', 'PM25').replace('10', 'PM10'));
+        const labelSpan = label?.previousElementSibling;
+        if (labelSpan) labelSpan.style.color = color;
+    }
+
+    // ============================================================
+    // RENDER ALL
+    // ============================================================
+    function renderAll() {
+        const data = getFilteredData();
+        renderStats(data);
+        renderChart(data);
+        renderTable(data);
+    }
+
+    // ============================================================
+    // STATS
+    // ============================================================
+    function renderStats(data) {
+        const calc = field => {
+            const vals = data.map(d => d[field]);
+            return {
+                min: Math.min(...vals),
+                max: Math.max(...vals),
+                avg: vals.reduce((a, b) => a + b, 0) / vals.length,
+            };
+        };
+        const pm1 = calc('pm1'), pm25 = calc('pm25'), pm10 = calc('pm10');
+        $('statsGrid').innerHTML = `
+            <div class="stat-card pm1">
+                <div class="stat-label">PM1.0 평균</div>
+                <div class="stat-value">${pm1.avg.toFixed(1)}</div>
+                <div class="stat-range">${pm1.min} ~ ${pm1.max} μg/m<sup>3</sup></div>
+            </div>
+            <div class="stat-card pm25">
+                <div class="stat-label">PM2.5 평균</div>
+                <div class="stat-value">${pm25.avg.toFixed(1)}</div>
+                <div class="stat-range">${pm25.min} ~ ${pm25.max} μg/m<sup>3</sup></div>
+            </div>
+            <div class="stat-card pm10">
+                <div class="stat-label">PM10 평균</div>
+                <div class="stat-value">${pm10.avg.toFixed(1)}</div>
+                <div class="stat-range">${pm10.min} ~ ${pm10.max} μg/m<sup>3</sup></div>
+            </div>
+        `;
+    }
+
+    // ============================================================
+    // CHART
+    // ============================================================
+    function renderChart(data) {
+        if (!highchartsReady) {
+            $('chartPM').innerHTML = '<div style="text-align:center;padding:60px 20px;color:#5a6580;">⚠️ Highcharts 라이브러리를 불러오지 못했습니다.<br>인터넷 연결을 확인해주세요.</div>';
+            return;
+        }
+
+        // Downsample for performance
+        const chartData = data.length > 3000 ? downsample(data, 2000) : data;
+        const timeLabels = chartData.map(d => d.time);
+
+        if (chartPM) chartPM.destroy();
+
+        chartPM = Highcharts.chart('chartPM', {
+            chart: { type: 'areaspline', zoomType: 'x' },
+            title: { text: '' },
+            xAxis: {
+                categories: timeLabels,
+                tickInterval: Math.max(1, Math.floor(timeLabels.length / 12)),
+                crosshair: { color: 'rgba(99,132,255,0.15)' },
+                title: { text: '시간 (HH:MM:SS)', style: { color: '#8b95b0', fontSize: '12px' }, },
+            },
+            yAxis: {
+                title: { text: 'μg/m³', style: { color: '#8b95b0', fontSize: '12px' } },
+                min: 0,
+                labels: { format: '{value}' },
+            },
+            tooltip: {
+                shared: true,
+                headerFormat: '<span style="font-size:13px;font-weight:700;">⏱ {point.key}</span><br/>',
+                pointFormat: '<span style="color:{series.color}">●</span> {series.name}: <b>{point.y}</b> μg/m³<br/>',
+            },
+            legend: { enabled: false },
+            series: [
+                {
+                    name: 'PM1.0',
+                    _key: 'pm1',
+                    data: chartData.map(d => d.pm1),
+                    color: seriesColors.pm1,
+                    lineWidth: currentLineWidth,
+                    visible: seriesVisible.pm1,
+                    fillColor: {
+                        linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                        stops: [[0, seriesColors.pm1 + '40'], [1, seriesColors.pm1 + '00']],
+                    },
+                },
+                {
+                    name: 'PM2.5',
+                    _key: 'pm25',
+                    data: chartData.map(d => d.pm25),
+                    color: seriesColors.pm25,
+                    lineWidth: currentLineWidth,
+                    visible: seriesVisible.pm25,
+                    fillColor: {
+                        linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                        stops: [[0, seriesColors.pm25 + '40'], [1, seriesColors.pm25 + '00']],
+                    },
+                },
+                {
+                    name: 'PM10',
+                    _key: 'pm10',
+                    data: chartData.map(d => d.pm10),
+                    color: seriesColors.pm10,
+                    lineWidth: currentLineWidth,
+                    visible: seriesVisible.pm10,
+                    fillColor: {
+                        linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                        stops: [[0, seriesColors.pm10 + '40'], [1, seriesColors.pm10 + '00']],
+                    },
+                },
+            ],
+        });
+    }
+
+    function downsample(data, target) {
+        if (data.length <= target) return data;
+        const step = data.length / target;
+        const result = [];
+        for (let i = 0; i < target; i++) result.push(data[Math.floor(i * step)]);
+        result.push(data[data.length - 1]);
+        return result;
+    }
+
+    // ============================================================
+    // TABLE
+    // ============================================================
+    function renderTable(data) {
+        const display = data.slice(0, 500);
+        $('tableCount').textContent = data.length.toLocaleString();
+
+        $('dataTableBody').innerHTML = display.map(d => `
+            <tr>
+                <td>${d.count}</td>
+                <td>${d.time}</td>
+                <td class="${pmClass(d.pm1)}">${d.pm1}</td>
+                <td class="${pmClass(d.pm25)}">${d.pm25}</td>
+                <td class="${pmClass(d.pm10, true)}">${d.pm10}</td>
+            </tr>
+        `).join('');
+    }
+
+    function pmClass(v, isPM10 = false) {
+        if (isPM10) {
+            if (v <= 30) return 'pm-good';
+            if (v <= 80) return 'pm-moderate';
+            if (v <= 150) return 'pm-unhealthy';
+            return 'pm-hazardous';
+        }
+        if (v <= 15) return 'pm-good';
+        if (v <= 35) return 'pm-moderate';
+        if (v <= 75) return 'pm-unhealthy';
+        return 'pm-hazardous';
+    }
+
+    // ============================================================
+    // EXPORT
+    // ============================================================
+    $('btnExportCSV').addEventListener('click', () => {
+        const data = getFilteredData();
+        let csv = 'Count,Time,PM1.0,PM2.5,PM10\n';
+        data.forEach(d => csv += `${d.count},${d.time},${d.pm1},${d.pm25},${d.pm10}\n`);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `session_${currentSession}_filtered.csv`;
+        link.click();
+    });
+
+    function showLoading(show) { $('loadingOverlay').classList.toggle('active', show); }
+    </script>
+</body>
+</html>
