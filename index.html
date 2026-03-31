@@ -334,6 +334,35 @@
         .color-pick::-moz-color-swatch { border: none; border-radius: 4px; }
         .color-label { font-size: 11px; font-weight: 600; }
 
+        /* Standard Toggle Buttons */
+        .std-row {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            padding: 10px 0;
+        }
+        .std-row-label {
+            font-size: 11px; color: var(--text-muted); font-weight: 600;
+            letter-spacing: 0.3px; white-space: nowrap;
+        }
+        .std-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 12px; border-radius: 8px; cursor: pointer;
+            font-size: 11px; font-weight: 600; font-family: inherit;
+            border: 1px solid var(--border); background: var(--bg-secondary);
+            color: var(--text-muted); transition: all 0.25s;
+            user-select: none; white-space: nowrap;
+        }
+        .std-btn .std-icon {
+            font-size: 14px; transition: all 0.25s;
+        }
+        .std-btn.active {
+            border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08);
+            color: var(--accent-red);
+        }
+        .std-btn.active.env {
+            border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.08);
+            color: var(--accent-green);
+        }
+
         #chartPM { width: 100%; height: 420px; }
 
         /* Data Table */
@@ -540,6 +569,17 @@
                         <span class="color-label" style="color:var(--color-pm10)">PM10</span>
                         <input type="color" class="color-pick" id="colorPM10" value="#fb923c" title="PM10 색상">
                     </div>
+                </div>
+                <div class="std-row">
+                    <span class="std-row-label">📏 기준선</span>
+                    <button class="std-btn" id="stdMoel" onclick="toggleStandard('moel')">
+                        <span class="material-icons-round std-icon">horizontal_rule</span>
+                        고용노동부 (PM10:100 / PM2.5:50)
+                    </button>
+                    <button class="std-btn env" id="stdEnv" onclick="toggleStandard('env')">
+                        <span class="material-icons-round std-icon">horizontal_rule</span>
+                        환경정책기본법 (PM10:100 / PM2.5:35)
+                    </button>
                 </div>
                 <div id="chartPM"></div>
             </div>
@@ -881,6 +921,55 @@
     let currentLineWidth = 2.5;
     let seriesColors = { pm1: '#22d3ee', pm25: '#6384ff', pm10: '#fb923c' };
 
+    // Standard reference lines state
+    let standardsVisible = { moel: false, env: false };
+
+    function toggleStandard(key) {
+        standardsVisible[key] = !standardsVisible[key];
+        $('std' + key.charAt(0).toUpperCase() + key.slice(1)).classList.toggle('active');
+        applyPlotLines();
+    }
+
+    function getStandardPlotLines() {
+        const lines = [];
+        if (standardsVisible.moel) {
+            lines.push({
+                value: 100, color: '#f87171', width: 2, dashStyle: 'Dash',
+                label: { text: '고용노동부 PM10: 100', align: 'right', style: { color: '#f87171', fontSize: '10px', fontWeight: '600' }, y: -4 },
+                zIndex: 5, _std: true,
+            });
+            lines.push({
+                value: 50, color: '#fb7185', width: 2, dashStyle: 'Dash',
+                label: { text: '고용노동부 PM2.5: 50', align: 'right', style: { color: '#fb7185', fontSize: '10px', fontWeight: '600' }, y: -4 },
+                zIndex: 5, _std: true,
+            });
+        }
+        if (standardsVisible.env) {
+            lines.push({
+                value: 100, color: '#34d399', width: 2, dashStyle: 'ShortDot',
+                label: { text: '환경기본법 PM10: 100', align: 'left', style: { color: '#34d399', fontSize: '10px', fontWeight: '600' }, y: -4 },
+                zIndex: 5, _std: true,
+            });
+            lines.push({
+                value: 35, color: '#2dd4bf', width: 2, dashStyle: 'ShortDot',
+                label: { text: '환경기본법 PM2.5: 35', align: 'left', style: { color: '#2dd4bf', fontSize: '10px', fontWeight: '600' }, y: -4 },
+                zIndex: 5, _std: true,
+            });
+        }
+        return lines;
+    }
+
+    function applyPlotLines() {
+        if (!chartPM) return;
+        // Remove existing standard plotLines
+        const yAxis = chartPM.yAxis[0];
+        const existing = (yAxis.plotLinesAndBands || []).filter(p => p.options._std);
+        existing.forEach(p => yAxis.removePlotLine(p.options.id));
+        // We need to use IDs, so let's rebuild
+        // Simpler: just update the whole yAxis
+        yAxis.update({ plotLines: getStandardPlotLines() }, true);
+    }
+
     $('lineWidthSlider').addEventListener('input', function() {
         currentLineWidth = parseFloat(this.value);
         $('lineWidthValue').textContent = currentLineWidth + 'px';
@@ -986,6 +1075,7 @@
                 title: { text: 'μg/m³', style: { color: '#8b95b0', fontSize: '12px' } },
                 min: 0,
                 labels: { format: '{value}' },
+                plotLines: getStandardPlotLines(),
             },
             tooltip: {
                 shared: true,
