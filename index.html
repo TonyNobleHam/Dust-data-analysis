@@ -727,7 +727,7 @@
     });
 
     function handleFile(file) {
-        if (!file.name.endsWith('.csv')) { alert('CSV 파일만 지원됩니다.'); return; }
+        if (!file.name.toLowerCase().endsWith('.csv')) { alert('CSV 파일만 지원됩니다.'); return; }
         showLoading(true);
         const reader = new FileReader();
         reader.onload = e => {
