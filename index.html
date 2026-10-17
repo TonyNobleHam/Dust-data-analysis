@@ -614,6 +614,7 @@
         </div>
     </div>
 
+    <p style="text-align:center;color:#8b95b0;padding:16px">CSV 측정값은 이 브라우저에서 처리됩니다. 차트·글꼴 로딩에는 인터넷 연결이 필요합니다.</p>
     <!-- Highcharts: load with fallback -->
     <script>
     // Dynamic Highcharts loader with fallback
@@ -629,7 +630,7 @@
 
     async function loadHighcharts() {
         const cdns = [
-            'https://code.highcharts.com/highcharts.js',
+            'https://code.highcharts.com/11.4.0/highcharts.js',
             'https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.4.0/highcharts.min.js',
             'https://cdn.jsdelivr.net/npm/highcharts@11.4.0/highcharts.min.js',
         ];
@@ -687,6 +688,7 @@
                     spline: { lineWidth: 2.5, marker: { enabled: false }, states: { hover: { lineWidth: 3 } } },
                 }
             });
+            if (currentSessionData.length) renderChart(getFilteredData());
         } else {
             console.error('Highcharts could not be loaded from any CDN.');
         }
@@ -731,8 +733,13 @@
         showLoading(true);
         const reader = new FileReader();
         reader.onload = e => {
-            setTimeout(() => { parseCSV(e.target.result, file); showLoading(false); }, 100);
+            setTimeout(() => {
+                try { parseCSV(e.target.result, file); }
+                catch (error) { alert(error.message); }
+                finally { showLoading(false); }
+            }, 100);
         };
+        reader.onerror = () => { showLoading(false); alert('파일을 읽지 못했습니다. 다시 선택해주세요.'); };
         reader.readAsText(file);
     }
 
@@ -741,12 +748,12 @@
     // ============================================================
     function parseCSV(text, file) {
         const lines = text.trim().split(/\r?\n/);
-        allData = [];
+        const parsed = [];
 
         for (let i = 1; i < lines.length; i++) {
             const cols = lines[i].split(',');
             if (cols.length < 12) continue;
-            allData.push({
+            const row = {
                 dataId:  parseInt(cols[0]),
                 date:    cols[1],
                 time:    cols[2],
@@ -755,9 +762,16 @@
                 pm1:     parseFloat(cols[5]),
                 pm25:    parseFloat(cols[6]),
                 pm10:    parseFloat(cols[7]),
-            });
+            };
+            if (!/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(row.date) || !/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(row.time) ||
+                !['dataId','session','count','pm1','pm25','pm10'].every(k => Number.isFinite(row[k]))) {
+                throw new Error(`${i + 1}행의 날짜·시간 또는 숫자 형식을 확인해주세요.`);
+            }
+            parsed.push(row);
         }
 
+        if (!parsed.length) throw new Error('분석 가능한 데이터가 없습니다. 12열 이상의 DUST_LOG CSV를 선택해주세요.');
+        allData = parsed;
         sessions = {};
         allData.forEach(d => {
             if (!sessions[d.session]) sessions[d.session] = [];
@@ -857,9 +871,9 @@
 
     function handleRange() {
         let minV = parseInt($('rangeMin').value), maxV = parseInt($('rangeMax').value);
-        if (minV > maxV - 10) {
-            if (this === $('rangeMin')) $('rangeMin').value = maxV - 10;
-            else $('rangeMax').value = minV + 10;
+        if (minV > maxV) {
+            if (this === $('rangeMin')) $('rangeMin').value = maxV;
+            else $('rangeMax').value = minV;
         }
         updateRangeView();
         clearTimeout(rangeTimer);
@@ -1211,6 +1225,7 @@
         link.href = URL.createObjectURL(blob);
         link.download = `session_${currentSession}_filtered.csv`;
         link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     });
 
     function showLoading(show) { $('loadingOverlay').classList.toggle('active', show); }
