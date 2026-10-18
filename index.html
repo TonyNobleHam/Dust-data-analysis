@@ -570,17 +570,19 @@
                         <input type="color" class="color-pick" id="colorPM10" value="#fb923c" title="PM10 색상">
                     </div>
                 </div>
-                <div class="std-row">
-                    <span class="std-row-label">📏 기준선</span>
-                    <button class="std-btn" id="stdMoel" onclick="toggleStandard('moel')">
-                        <span class="material-icons-round std-icon">horizontal_rule</span>
-                        고용노동부 (PM10:100 / PM2.5:50)
-                    </button>
-                    <button class="std-btn env" id="stdEnv" onclick="toggleStandard('env')">
-                        <span class="material-icons-round std-icon">horizontal_rule</span>
-                        환경정책기본법 (PM10:100 / PM2.5:35)
-                    </button>
-                </div>
+                <section aria-label="미세먼지 기준 비교">
+                    <div class="std-row" id="standardControls"></div>
+                    <p id="standardNotice" role="status" style="font-size:13px;line-height:1.7;margin:12px 0"></p>
+                    <details style="font-size:13px;line-height:1.7;margin-bottom:16px">
+                        <summary>기준값·평균시간·적용 환경·공식 출처</summary>
+                        <div style="overflow-x:auto"><table class="data-table">
+                            <thead><tr><th>기준</th><th>PM2.5</th><th>PM10</th><th>평균시간</th><th>적용 환경 / 성격 / 출처</th></tr></thead>
+                            <tbody id="standardTable"></tbody>
+                        </table></div>
+                        <p>단위: µg/m³. PM1 기준선은 제공하지 않습니다. 기준선은 순간값의 허용 한계가 아닙니다.
+                        표시되는 측정 평균은 선택 구간의 산술평균이며 8시간 시간가중평균·24시간 평균·연평균을 대신하지 않습니다.</p>
+                    </details>
+                </section>
                 <div id="chartPM"></div>
             </div>
 
@@ -927,6 +929,7 @@
             });
             chartPM.redraw();
         }
+        applyPlotLines();
     }
 
     // ============================================================
@@ -935,54 +938,103 @@
     let currentLineWidth = 2.5;
     let seriesColors = { pm1: '#22d3ee', pm25: '#6384ff', pm10: '#fb923c' };
 
-    // Standard reference lines state
-    let standardsVisible = { moel: false, env: false };
+    // Reference catalog: edit values, descriptions and source/version together.
+    // This data is deliberately separate from rendering/comparison logic.
+    const AIR_QUALITY_STANDARDS = [
+        { id: 'moel', name: '고용노동부 사무실', period: '8시간 시간가중평균', hours: 8,
+          values: { pm25: 50, pm10: 100 }, unit: 'µg/m³', environment: '사무실 실내',
+          nature: '지도·권고 관리기준', note: '원문 표·주석 재확인 필요: 기존 값 유지, 잠정 참고용.',
+          version: '고용노동부고시 제2020-45호 / 시행 2020-01-16', checked: '2026-10-19',
+          verification: 'pending-original-table', color: '#f87171', dash: 'Dash',
+          source: 'https://www.moel.go.kr/info/lawinfo/instruction/view.do?bbs_seq=20200100692' },
+        { id: 'env', name: '국가 대기환경기준', period: '24시간 평균', hours: 24,
+          values: { pm25: 35, pm10: 100 }, unit: 'µg/m³', environment: '실외 대기',
+          nature: '환경정책기본법 시행령 별표 1', note: '24시간 평균은 99백분위수 조건. 실내 유지기준·사업장 노출기준과 다릅니다.',
+          version: '시행령 시행 2026-10-08 / 공식 국가기준 표 대조', checked: '2026-10-19',
+          verification: 'official-table-crosscheck', color: '#34d399', dash: 'ShortDot',
+          source: 'https://cleanair.seoul.go.kr/information/info2' },
+        { id: 'envAnnual', name: '국가 대기환경기준', period: '연간 평균', hours: null,
+          values: { pm25: 15, pm10: 50 }, unit: 'µg/m³', environment: '실외 대기',
+          nature: '환경정책기본법 시행령 별표 1', note: '달력 연도별 유효자료와 측정방법 검토가 필요합니다.',
+          version: '시행령 시행 2026-10-08 / 공식 국가기준 표 대조', checked: '2026-10-19',
+          verification: 'official-table-crosscheck', color: '#34d399', dash: 'LongDash',
+          source: 'https://cleanair.seoul.go.kr/information/info2' },
+        { id: 'who', name: 'WHO 2021', period: '24시간 평균', hours: 24,
+          values: { pm25: 15, pm10: 45 }, unit: 'µg/m³', environment: '일반 인구의 실내·실외 공기 노출',
+          nature: '법적 강제력이 없는 건강기반 권고', note: '일평균의 연간 99백분위수(연 3–4일 초과에 해당). 직업성 노출기준이 아닙니다.',
+          version: '2021-09-22 발간', checked: '2026-10-19', verification: 'official-table', color: '#c4b5fd', dash: 'DashDot',
+          source: 'https://www.who.int/news-room/questions-and-answers/item/who-global-air-quality-guidelines' },
+        { id: 'whoAnnual', name: 'WHO 2021', period: '연간 평균', hours: null,
+          values: { pm25: 5, pm10: 15 }, unit: 'µg/m³', environment: '일반 인구의 실내·실외 공기 노출',
+          nature: '법적 강제력이 없는 건강기반 권고', note: '단기 측정 평균에서 연평균을 추정하지 않습니다.',
+          version: '2021-09-22 발간', checked: '2026-10-19', verification: 'official-table', color: '#c4b5fd', dash: 'LongDashDot',
+          source: 'https://www.who.int/news-room/questions-and-answers/item/who-global-air-quality-guidelines' }
+    ];
+    let standardsVisible = Object.fromEntries(AIR_QUALITY_STANDARDS.map(s => [s.id, false]));
+
+    function initStandardControls() {
+        $('standardControls').innerHTML = AIR_QUALITY_STANDARDS.map(s =>
+            `<button type="button" class="std-btn" id="std-${s.id}" aria-pressed="false"
+             onclick="toggleStandard('${s.id}')">${s.name} · ${s.period}${s.verification.startsWith('pending') ? ' (잠정)' : ''}</button>`).join('');
+        $('standardTable').innerHTML = AIR_QUALITY_STANDARDS.map(s =>
+            `<tr><td>${s.name}</td><td>${s.values.pm25} ${s.unit}</td><td>${s.values.pm10} ${s.unit}</td>
+            <td>${s.period}</td><td>${s.environment} / ${s.nature}<br>${s.note}<br>
+            <a href="${s.source}" target="_blank" rel="noopener noreferrer" style="color:#a5b4fc">공식 출처</a>
+            · ${s.version} · 확인 ${s.checked}</td></tr>`).join('');
+    }
 
     function toggleStandard(key) {
+        if (!Object.hasOwn(standardsVisible, key)) return;
         standardsVisible[key] = !standardsVisible[key];
-        $('std' + key.charAt(0).toUpperCase() + key.slice(1)).classList.toggle('active');
+        const button = $('std-' + key);
+        button.classList.toggle('active', standardsVisible[key]);
+        button.setAttribute('aria-pressed', String(standardsVisible[key]));
         applyPlotLines();
+        renderStandardNotice(getFilteredData());
     }
 
+    // UTC used only for timezone-independent arithmetic on device wall-clock timestamps.
+    function referenceTimestamp(row) {
+        const value = `${row.date.replaceAll('/', '-')}T${row.time}Z`;
+        const ms = Date.parse(value);
+        return Number.isFinite(ms) && new Date(ms).toISOString().slice(0,19) === value.slice(0,19) ? ms : NaN;
+    }
+    function referenceNotice(data, selected) {
+        const disclaimer = '참고용 비교입니다. 센서 측정값으로 법적 적합·부적합 또는 안전 여부를 판정하지 않습니다. ';
+        if (data.length < 2) return disclaimer + '측정시간 산정에 필요한 자료가 부족합니다.';
+        const times = data.map(referenceTimestamp);
+        if (times.some((t,i) => !Number.isFinite(t) || (i > 0 && t <= times[i-1])))
+            return disclaimer + '날짜 오류·중복·역순 기록이 있어 측정시간을 신뢰할 수 없습니다.';
+        const hours = (times.at(-1) - times[0]) / 3600000;
+        const short = selected.filter(s => s.hours !== null && hours < s.hours);
+        let message = `선택 구간 경과시간 ${hours.toFixed(2)}시간. ` + disclaimer;
+        if (short.length) message += '평균시간 미달: ' + short.map(s => `${s.name} ${s.period}`).join(', ') + '. ';
+        if (selected.some(s => s.hours === null)) message += '연평균 비교에는 달력 연도별 유효자료 검토가 필요합니다. ';
+        message += '경과시간은 실제 연속 측정시간이 아닙니다. 결측·측정방법·보정·적용 환경 및 백분위수 조건을 별도로 확인해야 합니다.';
+        return message;
+    }
+    function renderStandardNotice(data) {
+        $('standardNotice').textContent = referenceNotice(data, AIR_QUALITY_STANDARDS.filter(s => standardsVisible[s.id]));
+    }
     function getStandardPlotLines() {
-        const lines = [];
-        if (standardsVisible.moel) {
-            lines.push({
-                value: 100, color: '#f87171', width: 2, dashStyle: 'Dash',
-                label: { text: '고용노동부 PM10: 100', align: 'right', style: { color: '#f87171', fontSize: '10px', fontWeight: '600' }, y: -4 },
-                zIndex: 5, _std: true,
-            });
-            lines.push({
-                value: 50, color: '#fb7185', width: 2, dashStyle: 'Dash',
-                label: { text: '고용노동부 PM2.5: 50', align: 'right', style: { color: '#fb7185', fontSize: '10px', fontWeight: '600' }, y: -4 },
-                zIndex: 5, _std: true,
-            });
+        // Group coincident values into one label to avoid obscuring different standards.
+        const groups = new Map();
+        for (const s of AIR_QUALITY_STANDARDS.filter(s => standardsVisible[s.id])) {
+            for (const [key, value] of Object.entries(s.values)) {
+                if (!seriesVisible[key]) continue;
+                if (!groups.has(value)) groups.set(value, { value, color: s.color, dashStyle: s.dash, labels: [] });
+                groups.get(value).labels.push(`${s.name} ${key === 'pm25' ? 'PM2.5' : 'PM10'} · ${s.period}${s.verification.startsWith('pending') ? ' [잠정]' : ''}`);
+            }
         }
-        if (standardsVisible.env) {
-            lines.push({
-                value: 100, color: '#34d399', width: 2, dashStyle: 'ShortDot',
-                label: { text: '환경기본법 PM10: 100', align: 'left', style: { color: '#34d399', fontSize: '10px', fontWeight: '600' }, y: -4 },
-                zIndex: 5, _std: true,
-            });
-            lines.push({
-                value: 35, color: '#2dd4bf', width: 2, dashStyle: 'ShortDot',
-                label: { text: '환경기본법 PM2.5: 35', align: 'left', style: { color: '#2dd4bf', fontSize: '10px', fontWeight: '600' }, y: -4 },
-                zIndex: 5, _std: true,
-            });
-        }
-        return lines;
+        return [...groups.values()].map(g => ({ id: `aq-reference-${g.value}`, value: g.value,
+            color: g.color, dashStyle: g.dashStyle, width: 2, zIndex: 5, _std: true,
+            label: { text: `${g.labels.join(' / ')}: ${g.value} µg/m³`, align: 'left',
+                style: { color: g.color, fontSize: '10px' }, y: -4 } }));
     }
-
     function applyPlotLines() {
-        if (!chartPM) return;
-        // Remove existing standard plotLines
-        const yAxis = chartPM.yAxis[0];
-        const existing = (yAxis.plotLinesAndBands || []).filter(p => p.options._std);
-        existing.forEach(p => yAxis.removePlotLine(p.options.id));
-        // We need to use IDs, so let's rebuild
-        // Simpler: just update the whole yAxis
-        yAxis.update({ plotLines: getStandardPlotLines() }, true);
+        if (chartPM) chartPM.yAxis[0].update({ plotLines: getStandardPlotLines() }, true);
     }
+    initStandardControls();
 
     $('lineWidthSlider').addEventListener('input', function() {
         currentLineWidth = parseFloat(this.value);
@@ -1024,6 +1076,7 @@
     // ============================================================
     function renderAll() {
         const data = getFilteredData();
+        renderStandardNotice(data);
         renderStats(data);
         renderChart(data);
         renderTable(data);
